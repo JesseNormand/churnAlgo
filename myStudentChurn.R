@@ -15,10 +15,6 @@ attach(datOne)
 
 datOne <- datOne[sample(1:nrow(datOne), size = 500), ]
 
-
-datOne$house_type <- as.factor(datOne$house_type)
-datOne$state <- as.factor(datOne$state)
-
 table(datOne$retention)
 
 #Plot feature distribution 
@@ -57,22 +53,64 @@ testd <- datOne[ind==2,]
 #Set Model
 
 randForest <- rand_forest(trees = 1000, min_n = 5) %>% 
-  set_engine("randomForest") %>% 
-  set_mode("classification")
+   set_engine("randomForest") %>% 
+   set_mode("classification")
+ rfModelFit <- randForest %>% fit(retention ~ sex_m, train)
 
-rfModelFit <- randForest %>% fit(retention ~ sex_m + age + mjob_health, train)
+
+# multiRegr <- multinom_reg(penalty = 1) %>% 
+#   set_engine("nnet") %>% 
+#   set_mode("classification")
+
+# Train a multinomial regression model without any preprocessing
+# set.seed(2056)
+# multiFit <- multiRegr%>% 
+#   fit(retention ~ ., data = train)
+
+# Print the model
+multiFit
+
+#Predictions
+retentionResults <- testd %>% select(retention) %>% 
+bind_cols(rfModelFit%>% 
+            predict(new_data = testd))
+# Print predictions
+retentionResults %>% 
+  slice_head(n = 5)
+
+retentionResults$retention <- as.factor(retentionResults$retention)
+
+# Confusion matrix
+retentionResults %>% 
+  conf_mat(retention, .pred_class)
 
 
-#Confusion Matrix
-p1 <- predict(rfModelFit, train)
-confusionMatrix(p1$.pred_class, train$ retention)
+# Make predictions then bind them to the test set
+results <- testd %>% select(retention) %>% 
+  bind_cols(rfModelFit %>% predict(new_data = testd))
 
-p2 <- predict(rfModelFit, testd)
-confusionMatrix(p2$.pred_class, testd$ retention)
+#if needed : results$retention <- as.factor(results$retention)
+
+head(results)
+
+# Calculate accuracy: proportion of data predicted correctly
+accuracy(data = results, retention, estimate = .pred_class)
+
 
 #Set factors the same level 
 # p1$.pred_class <- factor(p1$.pred_class, levels = levels(train$house_type))
 # p2 <- factor(p2, levels = levels(testd$house_type))
 
-#
+# Make a roc_chart
+# Predict class probabilities and bind them to results
+resultsRoc <- results %>% 
+  bind_cols(rfModelFit %>% 
+              predict(new_data = testd))
+
+update_geom_defaults(geom = "tile", new = list(color = "black", alpha = 0.7))
+# Visualize confusion matrix
+results %>% 
+  conf_mat(retention, .pred_class) %>% 
+  autoplot(type = "heatmap")
+
 
